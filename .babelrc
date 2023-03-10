@@ -1,0 +1,5 @@
+{
+    "presets":[
+        "@babel/preset-env"//默认转换插件
+    ]
+}
