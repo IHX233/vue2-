@@ -7,10 +7,17 @@
     <title>Document</title>
 </head>
 <body>
-    hello
+    <div id="app"></div>
 </body>
 <script src="../dist/umd/vue.js"></script>
 <script>
-    console.log(vue)
+    let vm = new Vue({
+        el:'#app',
+        data(){
+            return {
+                a:1
+            }
+        }
+    })
 </script>
 </html>

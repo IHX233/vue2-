@@ -4,7 +4,7 @@ export default {
     input:'./src/index.js',//入口文件
     output:{
         format:'umd',//模块化的类型，
-        name:'vue',//全局变量的名字
+        name:'Vue',//全局变量的名字
         file:'dist/umd/vue.js',//打包后文件位置
         sourcemap:true//将转化前代码与转化后代码形成映射，方便调试
     },
