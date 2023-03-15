@@ -16,13 +16,10 @@
         data(){
             return {
                 a:1,
-                b:{
-                    c:2
-                }
+                b:[{c:2}]
             }
         }
     })
-    vm._data.b.c = {d:7}
-    console.log(vm._data.b.c.d)
+    vm.b.push(1)
 </script>
 </html>

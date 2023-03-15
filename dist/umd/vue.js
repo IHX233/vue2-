@@ -50,12 +50,73 @@
     return typeof key === "symbol" ? key : String(key);
   }
 
+  function proxy(vm, data, key) {
+    Object.defineProperty(vm, key, {
+      get: function get() {
+        return vm[data][key];
+      },
+      set: function set(newValue) {
+        vm[data][key] = newValue;
+      }
+    });
+  }
+  function defineProperty(target, key, value) {
+    Object.defineProperty(target, key, {
+      enumerable: false,
+      //不能被枚举
+      configurable: false,
+      value: value
+    });
+  }
+
+  var oldArrayProtoMethods = Array.prototype;
+  var arrayMethods = Object.create(oldArrayProtoMethods);
+  var methods = ['push', 'pop', 'shift', 'shift', 'reverse', 'sort', 'splice'];
+  methods.forEach(function (method) {
+    arrayMethods[method] = function () {
+      for (var _len = arguments.length, arg = new Array(_len), _key = 0; _key < _len; _key++) {
+        arg[_key] = arguments[_key];
+      }
+      var result = oldArrayProtoMethods[method].apply(this, arg);
+      var inserted;
+      var ob = this._ob_;
+      switch (method) {
+        case 'push':
+        case 'unshift':
+          //两个都是增加，内容 可能是对象，需要劫持
+          inserted = arg;
+          break;
+        case 'splice':
+          //$set原理
+          inserted = arg.slice(2);
+      }
+      if (inserted) {
+        ob.observeArray(inserted);
+      }
+      return result;
+    };
+  });
+
   var Observe = /*#__PURE__*/function () {
     function Observe(value) {
       _classCallCheck(this, Observe);
-      this.walk(value);
+      //判断一个属性是否是被观测过，看它有没有_ob_属性
+      defineProperty(value, '_ob_', this);
+      if (Array.isArray(value)) {
+        value.__proto__ = arrayMethods;
+        this.observeArray(value);
+      } else {
+        this.walk(value);
+      }
     }
     _createClass(Observe, [{
+      key: "observeArray",
+      value: function observeArray(value) {
+        value.forEach(function (item) {
+          observe(item);
+        });
+      }
+    }, {
       key: "walk",
       value: function walk(data) {
         var keys = Object.keys(data);
@@ -83,7 +144,10 @@
   }
   function observe(data) {
     if (_typeof(data) !== "object" || data == null) {
-      return;
+      return data;
+    }
+    if (data._ob_) {
+      return data;
     }
     return new Observe(data);
   }
@@ -101,6 +165,9 @@
   function initData(vm) {
     var data = vm.$options.data;
     vm._data = data = typeof data == 'function' ? data.call(vm) : data;
+    for (var key in data) {
+      proxy(vm, '_data', key);
+    }
     observe(data);
   }
 

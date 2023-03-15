@@ -1,6 +1,22 @@
+import { defineProperty } from "../util"
+import { arrayMethods } from "./array"
+
 class Observe{
     constructor(value){
-        this.walk(value)
+        //判断一个属性是否是被观测过，看它有没有_ob_属性
+        defineProperty(value,'_ob_',this)
+        if(Array.isArray(value)){
+            value.__proto__ = arrayMethods
+            this.observeArray(value)
+        }else{
+            this.walk(value)
+        }
+        
+    }
+    observeArray(value){
+        value.forEach(item=>{
+            observe(item)
+        })
     }
     walk(data){
         let keys = Object.keys(data)
@@ -26,7 +42,10 @@ function defineReactive(data,key,value){
 }
 export function observe(data){
     if(typeof data !== "object" || data == null){
-        return
+        return data
+    }
+    if(data._ob_){
+        return data
     }
     return new Observe(data)
 }
