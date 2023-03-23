@@ -4,6 +4,33 @@
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Vue = factory());
 })(this, (function () { 'use strict';
 
+  function _iterableToArrayLimit(arr, i) {
+    var _i = null == arr ? null : "undefined" != typeof Symbol && arr[Symbol.iterator] || arr["@@iterator"];
+    if (null != _i) {
+      var _s,
+        _e,
+        _x,
+        _r,
+        _arr = [],
+        _n = !0,
+        _d = !1;
+      try {
+        if (_x = (_i = _i.call(arr)).next, 0 === i) {
+          if (Object(_i) !== _i) return;
+          _n = !1;
+        } else for (; !(_n = (_s = _x.call(_i)).done) && (_arr.push(_s.value), _arr.length !== i); _n = !0);
+      } catch (err) {
+        _d = !0, _e = err;
+      } finally {
+        try {
+          if (!_n && null != _i.return && (_r = _i.return(), Object(_r) !== _r)) return;
+        } finally {
+          if (_d) throw _e;
+        }
+      }
+      return _arr;
+    }
+  }
   function _typeof(obj) {
     "@babel/helpers - typeof";
 
@@ -34,6 +61,28 @@
       writable: false
     });
     return Constructor;
+  }
+  function _slicedToArray(arr, i) {
+    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+  }
+  function _arrayWithHoles(arr) {
+    if (Array.isArray(arr)) return arr;
+  }
+  function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+  }
+  function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+    for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+    return arr2;
+  }
+  function _nonIterableRest() {
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
   function _toPrimitive(input, hint) {
     if (typeof input !== "object" || input === null) return input;
@@ -212,7 +261,7 @@
       }
     }
     function chars(text) {
-      text = text.replace(/\s/g, '');
+      text = text.replace(/\s/g, ''); //去掉空格
       if (text) {
         currentParent.children.push({
           type: 3,
@@ -277,9 +326,58 @@
       }
     }
   }
+
+  function genProps(attrs) {
+    var str = '';
+    var _loop = function _loop() {
+      var attr = attrs[i];
+      if (attr.name === 'style') {
+        //对样式的特殊处理
+        var obj = {};
+        attr.value.split(';').foreach(function (item) {
+          var _item$split = item.split(':'),
+            _item$split2 = _slicedToArray(_item$split, 2),
+            key = _item$split2[0],
+            value = _item$split2[1];
+          obj[key] = value;
+        });
+        attr.value = obj;
+      }
+      str += "".concat(attr.name, ":").concat(JSON.stringify(attr.value), ",");
+    };
+    for (var i = 0; i < attrs.length; i++) {
+      _loop();
+    }
+    return "{".concat(str.slice(0, -1), "}");
+  }
+  function gen(node) {
+    if (node.type == 1) {
+      return generate(node); //生成元素节点的字符串
+    } else {
+      var text = node.text; //获取文本
+      //如果是普通文本，不带{{}}
+      return "_v(".concat(JSON.stringify(text), ")");
+    }
+  }
+  function genChildren(el) {
+    var children = el.children;
+    if (children) {
+      //将转换后的儿子用逗号拼接起来
+      return children.map(function (child) {
+        return gen(child);
+      }).join(',');
+    }
+  }
+  function generate(el) {
+    var children = genChildren(el); //儿子的生成 
+    var code = "_c('".concat(el.tag, "',").concat(el.attrs ? "".concat(genProps(el.attrs)) : 'undefined').concat(children ? ",".concat(children) : '', ")");
+    return code;
+  }
+
   function compileToFunctions(template) {
     var ast = parseHtml(template);
-    console.log(ast);
+    var code = generate(ast);
+    console.log(code);
   }
 
   function initMixin(Vue) {
