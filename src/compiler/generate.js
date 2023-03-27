@@ -1,3 +1,4 @@
+const defaultTagRe = /\{\{((?:.|\r?\n)+?)\}\}/g //匹配双大括号和里面的内容
 function genProps(attrs){
     let str = ''
     for(let i = 0;i<attrs.length;i++){
@@ -19,8 +20,26 @@ function gen(node){
         return generate(node)//生成元素节点的字符串
     }else{
         let text = node.text;//获取文本
-        //如果是普通文本，不带{{}}
-        return `_v(${JSON.stringify(text)})`
+        //_v('hello{{world}}') => _v('hello'+_s(world))
+        if(!defaultTagRe.test(text)){
+            //如果是普通文本，不带{{}}
+            return `_v(${JSON.stringify(text)})`
+        }
+        let tokens = []
+        let lastIndex = defaultTagRe.lastIndex = 0 //如果正则是全局模式，需要每次使用前设置为0
+        let match,index
+        while(match = defaultTagRe.exec(text)){
+            index = match.index//保存匹配到的索引
+            if(index > lastIndex){
+                tokens.push(JSON.stringify(text.slice(lastIndex,index)))
+            }
+            tokens.push(`_s(${match[1].trim()})`)
+            lastIndex = index + match[0].length
+        }
+        if(lastIndex<text.length){
+            tokens.push(JSON.stringify(text.slice(lastIndex)));
+        }
+        return `_v(${tokens.join('+')})`
     }
 }
 function genChildren(el){

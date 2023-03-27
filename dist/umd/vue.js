@@ -226,6 +226,7 @@
   var endTag = new RegExp("^<\\/".concat(qnameCapture, "[^>]*>")); //匹配标签结尾
   var attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>']+)))?/; //匹配属性
   var startTagClose = /^\s*(\/?)>/; //匹配标签结束
+
   function parseHtml(html) {
     function creatASTElement(tagName, attrs) {
       return {
@@ -327,6 +328,7 @@
     }
   }
 
+  var defaultTagRe = /\{\{((?:.|\r?\n)+?)\}\}/g; //匹配双大括号和里面的内容
   function genProps(attrs) {
     var str = '';
     var _loop = function _loop() {
@@ -355,8 +357,26 @@
       return generate(node); //生成元素节点的字符串
     } else {
       var text = node.text; //获取文本
-      //如果是普通文本，不带{{}}
-      return "_v(".concat(JSON.stringify(text), ")");
+      //_v('hello{{world}}') => _v('hello'+_s(world))
+      if (!defaultTagRe.test(text)) {
+        //如果是普通文本，不带{{}}
+        return "_v(".concat(JSON.stringify(text), ")");
+      }
+      var tokens = [];
+      var lastIndex = defaultTagRe.lastIndex = 0; //如果正则是全局模式，需要每次使用前设置为0
+      var match, index;
+      while (match = defaultTagRe.exec(text)) {
+        index = match.index; //保存匹配到的索引
+        if (index > lastIndex) {
+          tokens.push(JSON.stringify(text.slice(lastIndex, index)));
+        }
+        tokens.push("_s(".concat(match[1].trim(), ")"));
+        lastIndex = index + match[0].length;
+      }
+      if (lastIndex < text.length) {
+        tokens.push(JSON.stringify(text.slice(lastIndex)));
+      }
+      return "_v(".concat(tokens.join('+'), ")");
     }
   }
   function genChildren(el) {
@@ -375,9 +395,18 @@
   }
 
   function compileToFunctions(template) {
+    //1.将html转化为ast语法树
     var ast = parseHtml(template);
+
+    //2.优化静态节点
+
+    //3.通过这棵树重新生成代码
     var code = generate(ast);
-    console.log(code);
+
+    //4.将字符串变成函数 限制取值范围 通过with进行取值 之后通过render函数就可以改变this 让这个函数内部取到结果
+    var render = new Function("with(this){return ".concat(code, "}"));
+    console.log(render);
+    return render;
   }
 
   function initMixin(Vue) {
