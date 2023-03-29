@@ -11,6 +11,5 @@ export function compileToFunctions(template){
 
     //4.将字符串变成函数 限制取值范围 通过with进行取值 之后通过render函数就可以改变this 让这个函数内部取到结果
     let render = new Function(`with(this){return ${code}}`)
-    console.log(render)
     return render
 }

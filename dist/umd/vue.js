@@ -405,8 +405,16 @@
 
     //4.将字符串变成函数 限制取值范围 通过with进行取值 之后通过render函数就可以改变this 让这个函数内部取到结果
     var render = new Function("with(this){return ".concat(code, "}"));
-    console.log(render);
     return render;
+  }
+
+  function lifecycleMixin(Vue) {
+    Vue.prototype._update = function (vnode) {
+      console.log(vnode);
+    };
+  }
+  function mountComponent(vm, el) {
+    vm._update(vm._render());
   }
 
   function initMixin(Vue) {
@@ -434,13 +442,58 @@
         var render = compileToFunctions(template);
         options.render = render;
       }
+      mountComponent(vm);
+    };
+  }
+
+  function renderMixin(Vue) {
+    Vue.prototype._c = function () {
+      //创建虚拟dom元素
+      return createElement.apply(void 0, arguments);
+    };
+    Vue.prototype._s = function (val) {
+      //stringify
+      return val == null ? '' : _typeof(val) == 'object' ? JSON.stringify(val) : val;
+    };
+    Vue.prototype._v = function (text) {
+      //创建虚拟dom文本元素
+      return createTextVnode(text);
+    };
+    Vue.prototype._render = function () {
+      //_render = render
+      var vm = this;
+      var render = vm.$options.render;
+      var vnode = render.call(vm);
+      return vnode;
+    };
+  }
+  function createElement(tag) {
+    var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    for (var _len = arguments.length, children = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
+      children[_key - 2] = arguments[_key];
+    }
+    return vnode(tag, data, data.key, children);
+  }
+  function createTextVnode(text) {
+    return vnode(undefined, undefined, undefined, undefined, text);
+  }
+  function vnode(tag, data, key, children, text) {
+    return {
+      tag: tag,
+      data: data,
+      key: key,
+      children: children,
+      text: text
     };
   }
 
   function Vue(options) {
     this._init(options);
   }
+  //对原型进行拓展
   initMixin(Vue);
+  lifecycleMixin(Vue);
+  renderMixin(Vue);
 
   return Vue;
 
