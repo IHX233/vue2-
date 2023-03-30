@@ -16,6 +16,7 @@ export function initMixin(Vue){
         const vm = this
         const options = vm.$options
         el = document.querySelector(el)
+        vm.$el = el
         if(!options.render){
             //没有render，把template转换成render方法
             let template = options.template

@@ -408,9 +408,36 @@
     return render;
   }
 
+  function patch(oldVnode, vnode) {
+    console.log(oldVnode, vnode);
+    //虚拟dom转换为真实dom
+    var el = createElm(vnode); //产生真实dom
+    var parentElm = oldVnode.parentNode;
+    parentElm.insertBefore(el, oldVnode.nextSibling); //将新的节点插在老的节点前面
+    parentElm.removeChild(oldVnode); //删除老的节点
+  }
+
+  function createElm(vnode) {
+    var tag = vnode.tag,
+      children = vnode.children;
+      vnode.key;
+      vnode.data;
+      var text = vnode.text;
+    if (typeof tag == "string") {
+      vnode.el = document.createElement(tag);
+      children.forEach(function (child) {
+        vnode.el.appendChild(createElm(child));
+      });
+    } else {
+      vnode.el = document.createTextNode(text);
+    }
+    return vnode.el;
+  }
+
   function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
-      console.log(vnode);
+      var vm = this;
+      patch(vm.$el, vnode);
     };
   }
   function mountComponent(vm, el) {
@@ -432,6 +459,7 @@
       var vm = this;
       var options = vm.$options;
       el = document.querySelector(el);
+      vm.$el = el;
       if (!options.render) {
         //没有render，把template转换成render方法
         var template = options.template;
