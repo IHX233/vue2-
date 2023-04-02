@@ -1,12 +1,15 @@
 import {initState} from './state'
 import { compileToFunctions } from './compiler/index.js'
-import {mountComponent} from './lifecycle'
+import {callHook, mountComponent} from './lifecycle'
+import {mergeOptions} from './util'
 export function initMixin(Vue){
     Vue.prototype._init = function(options){
         const vm = this
-        vm.$options = options
+        vm.$options = mergeOptions(vm.constructor.options,options)
+        callHook(vm,'beforeCreate')
         //初始化状态（将数据做一个初始化劫持，当改变数据时更新视图）
         initState(vm)
+        callHook(vm,'created')
         if(vm.$options.el){
             vm.$mount(vm.$options.el)
         }

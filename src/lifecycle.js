@@ -6,5 +6,15 @@ export function lifecycleMixin(Vue){
     }
 }
 export function mountComponent(vm,el){
+    callHook(vm,'beforeMount')
     vm._update(vm._render())
+    callHook(vm,'mounted')
+}
+export function callHook(vm,hook){
+    const handlers = vm.$options[hook]
+    if(handlers){
+        for(let i = 0;i<handlers.length;i++){
+            handlers[i].call(vm)
+        }
+    }
 }

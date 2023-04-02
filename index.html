@@ -11,6 +11,12 @@
 </body>
 <script src="../dist/umd/vue.js"></script>
 <script>
+    //混入
+    Vue.mixin({
+        created(){
+            console.log('created')
+        }
+    })
     let vm = new Vue({
         el:'#app',
         data(){
@@ -18,6 +24,9 @@
                 a:1,
                 b:[{c:2}]
             }
+        },
+        created(){
+            console.log('created1')
         }
     })
     //渲染操作：先找render方法，默认没有传入render方法会找template，最后找el中指定元素进行渲染

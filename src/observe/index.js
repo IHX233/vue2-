@@ -7,7 +7,7 @@ class Observe{
         defineProperty(value,'_ob_',this)
         if(Array.isArray(value)){
             value.__proto__ = arrayMethods
-            this.observeArray(value)
+            this.observeArray(value)//数组中普通类型是不做观测的
         }else{
             this.walk(value)
         }

@@ -29,7 +29,7 @@ function initData(vm){
     for(let key in data){
         proxy(vm,'_data',key)
     }
-    observe(data)
+    observe(data)//让对象重新定义set、get方法
 }
 function initMethods(){
 

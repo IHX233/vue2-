@@ -117,6 +117,52 @@
       value: value
     });
   }
+  var LIFECYCLE_HOOKS = ['beforeCreate', 'created', 'beforeMount', 'mounted', 'beforeUpdate', 'updated', 'beforeDestroy', 'destroyed '];
+  var strats = [];
+  strats.data = function (parentVal, childValue) {
+    return childValue;
+  };
+  strats.computed = function () {};
+  strats.watch = function () {};
+  function mergeHook(parentVal, childValue) {
+    if (childValue) {
+      if (parentVal) {
+        return parentVal.concat(childValue); //父亲和儿子拼接
+      } else {
+        return [childValue]; //儿子转换为数组
+      }
+    } else {
+      return parentVal; //不合并，用父亲的
+    }
+  }
+
+  LIFECYCLE_HOOKS.forEach(function (hook) {
+    strats[hook] = mergeHook;
+  });
+  function mergeOptions(parent, child) {
+    var options = {};
+    //遍历父亲
+    for (var key in parent) {
+      //父亲和儿子都有的在这处理
+      mergeField(key);
+    }
+    //儿子有父亲没有的在这处理
+    for (var _key in child) {
+      //将儿子多的赋予到父亲上
+      if (!parent.hasOwnProperty(_key)) {
+        mergeField(_key);
+      }
+    }
+    function mergeField(key) {
+      //合并字段
+      if (strats[key]) {
+        options[key] = strats[key](parent[key], child[key]);
+      } else {
+        options[key] = child[key];
+      }
+    }
+    return options;
+  }
 
   var oldArrayProtoMethods = Array.prototype;
   var arrayMethods = Object.create(oldArrayProtoMethods);
@@ -153,7 +199,7 @@
       defineProperty(value, '_ob_', this);
       if (Array.isArray(value)) {
         value.__proto__ = arrayMethods;
-        this.observeArray(value);
+        this.observeArray(value); //数组中普通类型是不做观测的
       } else {
         this.walk(value);
       }
@@ -217,7 +263,7 @@
     for (var key in data) {
       proxy(vm, '_data', key);
     }
-    observe(data);
+    observe(data); //让对象重新定义set、get方法
   }
 
   var ncname = "[a-zA-Z_][\\-\\.0-9_a-zA-Z]*";
@@ -409,7 +455,7 @@
   }
 
   function patch(oldVnode, vnode) {
-    console.log(oldVnode, vnode);
+    // console.log(oldVnode,vnode)
     //虚拟dom转换为真实dom
     var el = createElm(vnode); //产生真实dom
     var parentElm = oldVnode.parentNode;
@@ -425,6 +471,7 @@
       var text = vnode.text;
     if (typeof tag == "string") {
       vnode.el = document.createElement(tag);
+      updateProperties(vnode);
       children.forEach(function (child) {
         vnode.el.appendChild(createElm(child));
       });
@@ -432,6 +479,21 @@
       vnode.el = document.createTextNode(text);
     }
     return vnode.el;
+  }
+  function updateProperties(vnode) {
+    var el = vnode.el;
+    var newProps = vnode.data;
+    for (var key in newProps) {
+      if (key == "style") {
+        for (var styleName in newProps.style) {
+          el.style[styleName] = newProps.style[styleName];
+        }
+      } else if (key == "class") {
+        el.className = el["class"];
+      } else {
+        el.setAttribute(key, newProps[key]);
+      }
+    }
   }
 
   function lifecycleMixin(Vue) {
@@ -441,15 +503,27 @@
     };
   }
   function mountComponent(vm, el) {
+    callHook(vm, 'beforeMount');
     vm._update(vm._render());
+    callHook(vm, 'mounted');
+  }
+  function callHook(vm, hook) {
+    var handlers = vm.$options[hook];
+    if (handlers) {
+      for (var i = 0; i < handlers.length; i++) {
+        handlers[i].call(vm);
+      }
+    }
   }
 
   function initMixin(Vue) {
     Vue.prototype._init = function (options) {
       var vm = this;
-      vm.$options = options;
+      vm.$options = mergeOptions(vm.constructor.options, options);
+      callHook(vm, 'beforeCreate');
       //初始化状态（将数据做一个初始化劫持，当改变数据时更新视图）
       initState(vm);
+      callHook(vm, 'created');
       if (vm.$options.el) {
         vm.$mount(vm.$options.el);
       }
@@ -515,13 +589,23 @@
     };
   }
 
+  function initGlobalApi(Vue) {
+    Vue.options = {};
+    Vue.mixin = function (mixin) {
+      this.options = mergeOptions(this.options, mixin);
+    };
+  }
+
   function Vue(options) {
     this._init(options);
   }
-  //对原型进行拓展
-  initMixin(Vue);
-  lifecycleMixin(Vue);
-  renderMixin(Vue);
+  //对原型进行拓展 原型方法
+  initMixin(Vue); //init方法
+  lifecycleMixin(Vue); //_update
+  renderMixin(Vue); //_render
+
+  //静态方法
+  initGlobalApi(Vue);
 
   return Vue;
 
