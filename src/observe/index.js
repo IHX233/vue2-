@@ -1,6 +1,6 @@
 import { defineProperty } from "../util"
 import { arrayMethods } from "./array"
-
+import Dep from "./dep"
 class Observe{
     constructor(value){
         //判断一个属性是否是被观测过，看它有没有_ob_属性
@@ -27,16 +27,19 @@ class Observe{
 }
 function defineReactive(data,key,value){
     observe(value);//如果值为对象，继续监控
+    let dep = new Dep()
     Object.defineProperty(data,key,{
-        get(){
-            console.log('get',data,key)
+        get(){//依赖收集
+            if(Dep.target){//让这个属性记住这个watcher
+                dep.depend()
+            }
             return value
         },
-        set(newValue){
-            console.log("set",data,key,newValue)
+        set(newValue){//依赖更新
             if(value === newValue) return
             observe(newValue) //如果新值设置为对象，继续监控
             value = newValue
+            dep.notify()
         }
     })
 }

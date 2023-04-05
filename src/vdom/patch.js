@@ -5,6 +5,7 @@ export function patch(oldVnode,vnode){
     let parentElm = oldVnode.parentNode
     parentElm.insertBefore(el,oldVnode.nextSibling)//将新的节点插在老的节点前面
     parentElm.removeChild(oldVnode)//删除老的节点
+    return el
 }
 function createElm(vnode){
     let {tag,children,key,data,text} = vnode
