@@ -1,9 +1,15 @@
+let id = 0
 class Dep{
     constructor(){
         this.subs = []
+        this.id = id++
     }
     depend(){
-        this.subs.push(Dep.target)
+        //dep存放watch，watch也存放dep
+        Dep.target.addDep(this)
+    }
+    addSub(watcher){
+        this.subs.push(watcher)
     }
     notify(){
         this.subs.forEach(watcher=>watcher.update())

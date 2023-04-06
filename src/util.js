@@ -73,3 +73,44 @@ export function mergeOptions(parent,child){
     }
     return options
 }
+let callbacks = []
+let pending = false
+function flushCallbacks(){
+    while(callbacks.length){
+        let cb = callbacks.pop()
+        cb()
+    }
+    callbacks.forEach(cb=>cb())
+    callbacks = []
+    pending = false
+}
+let timerFunc
+//兼容处理
+if(Promise){
+    timerFunc = () => {
+        Promise.resolve().then(flushCallbacks)
+    }
+}else if(MutationObserver){//可以监控dom变化，监控完毕异步更新
+    let observe = new MutationObserver(flushCallbacks)
+    let textNode = document.createTextNode(1)
+    observe.observe(textNode,{characterData:true})
+    timerFunc = ()=>{
+        textNode.textContent = 2
+    }
+}else if(setImmediate){
+    timerFunc = ()=>{
+        setImmediate(flushCallbacks)
+    }
+}else{
+    timerFunc = ()=>{
+        setTimeout(flushCallbacks)
+    }
+}
+export function nextTick(cb){
+    callbacks.push(cb)
+    if(!pending){ 
+        timerFunc()//这个是异步方法，做了兼容处理
+        pending = true
+    }
+    
+}

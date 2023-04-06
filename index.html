@@ -7,7 +7,7 @@
     <title>Document</title>
 </head>
 <body>
-    <div id="app">hello<div>1{{a}}2</div></div>
+    <div id="app">hello<div>1{{a}}{{b}}2</div></div>
 </body>
 <script src="../dist/umd/vue.js"></script>
 <script>
@@ -27,11 +27,19 @@
         },
         created(){
             console.log('created1')
+        },
+        updated(){
+            console.log('updated')
         }
     })
     //渲染操作：先找render方法，默认没有传入render方法会找template，最后找el中指定元素进行渲染
     //ast解析：把template转化为render方法
-    vm.a = 'gf'
-    // vm._update(vm._render())
+    vm.b.push(1)
+    vm.a = 2
+    vm.a = 3
+    console.log(vm.$el.innerHTML)
+    vm.$nextTick(()=>{
+        console.log(vm.$el.innerHTML)
+    })
 </script>
 </html>

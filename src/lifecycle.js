@@ -14,7 +14,7 @@ export function mountComponent(vm,el){
     }
     //初始化创建watcher
     let watcher = new Watcher(vm,updateComponent,()=>{
-        callHook(vm,'beforeUpdate')
+        callHook(vm,'updated')
     },true)
     watcher.get()
     callHook(vm,'mounted')

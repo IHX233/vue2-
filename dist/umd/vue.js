@@ -163,44 +163,99 @@
     }
     return options;
   }
+  var callbacks = [];
+  var pending$1 = false;
+  function flushCallbacks() {
+    while (callbacks.length) {
+      var cb = callbacks.pop();
+      cb();
+    }
+    callbacks.forEach(function (cb) {
+      return cb();
+    });
+    callbacks = [];
+    pending$1 = false;
+  }
+  var timerFunc;
+  //兼容处理
+  if (Promise) {
+    timerFunc = function timerFunc() {
+      Promise.resolve().then(flushCallbacks);
+    };
+  } else if (MutationObserver) {
+    //可以监控dom变化，监控完毕异步更新
+    var observe$1 = new MutationObserver(flushCallbacks);
+    var textNode = document.createTextNode(1);
+    observe$1.observe(textNode, {
+      characterData: true
+    });
+    timerFunc = function timerFunc() {
+      textNode.textContent = 2;
+    };
+  } else if (setImmediate) {
+    timerFunc = function timerFunc() {
+      setImmediate(flushCallbacks);
+    };
+  } else {
+    timerFunc = function timerFunc() {
+      setTimeout(flushCallbacks);
+    };
+  }
+  function nextTick(cb) {
+    callbacks.push(cb);
+    if (!pending$1) {
+      timerFunc(); //这个是异步方法，做了兼容处理
+      pending$1 = true;
+    }
+  }
 
   var oldArrayProtoMethods = Array.prototype;
   var arrayMethods = Object.create(oldArrayProtoMethods);
   var methods = ['push', 'pop', 'shift', 'shift', 'reverse', 'sort', 'splice'];
   methods.forEach(function (method) {
     arrayMethods[method] = function () {
-      for (var _len = arguments.length, arg = new Array(_len), _key = 0; _key < _len; _key++) {
-        arg[_key] = arguments[_key];
+      for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+        args[_key] = arguments[_key];
       }
-      var result = oldArrayProtoMethods[method].apply(this, arg);
+      //当调用数组劫持的七个方法时触发更新
+      var result = oldArrayProtoMethods[method].apply(this, args);
       var inserted;
       var ob = this._ob_;
       switch (method) {
         case 'push':
         case 'unshift':
           //两个都是增加，内容 可能是对象，需要劫持
-          inserted = arg;
+          inserted = args;
           break;
         case 'splice':
           //$set原理
-          inserted = arg.slice(2);
+          inserted = args.slice(2);
       }
       if (inserted) {
         ob.observeArray(inserted);
       }
+      ob.dep.notify(); //通知数组更新
       return result;
     };
   });
 
+  var id$1 = 0;
   var Dep = /*#__PURE__*/function () {
     function Dep() {
       _classCallCheck(this, Dep);
       this.subs = [];
+      this.id = id$1++;
     }
     _createClass(Dep, [{
       key: "depend",
       value: function depend() {
-        this.subs.push(Dep.target);
+        //dep存放watch，watch也存放dep
+        Dep.target.addDep(this);
+      }
+    }, {
+      key: "addSub",
+      value: function addSub(watcher) {
+        this.subs.push(watcher);
       }
     }, {
       key: "notify",
@@ -226,6 +281,7 @@
   var Observe = /*#__PURE__*/function () {
     function Observe(value) {
       _classCallCheck(this, Observe);
+      this.dep = new Dep(); //为了把dep放ob属性上，这样数组方法触发时才能用到dep的更新方法
       //判断一个属性是否是被观测过，看它有没有_ob_属性
       defineProperty(value, '_ob_', this);
       if (Array.isArray(value)) {
@@ -254,7 +310,8 @@
     return Observe;
   }();
   function defineReactive(data, key, value) {
-    observe(value); //如果值为对象，继续监控
+    //或取数组对应的dep
+    var childDep = observe(value); //如果值为对象，继续监控
     var dep = new Dep();
     Object.defineProperty(data, key, {
       get: function get() {
@@ -262,7 +319,12 @@
         if (Dep.target) {
           //让这个属性记住这个watcher
           dep.depend();
+          if (_typeof(childDep) == "object") {
+            //可能是数组，也可能是对象
+            childDep.dep.depend(); //这样才能收集数组的watch并在调用数组方法时触发更新
+          }
         }
+
         return value;
       },
       set: function set(newValue) {
@@ -276,7 +338,7 @@
   }
   function observe(data) {
     if (_typeof(data) !== "object" || data == null) {
-      return data;
+      return;
     }
     if (data._ob_) {
       return data;
@@ -301,6 +363,11 @@
       proxy(vm, '_data', key);
     }
     observe(data); //让对象重新定义set、get方法
+  }
+  function stateMixin(Vue) {
+    Vue.prototype.$nextTick = function (cb) {
+      nextTick(cb);
+    };
   }
 
   var ncname = "[a-zA-Z_][\\-\\.0-9_a-zA-Z]*";
@@ -541,13 +608,25 @@
       this.exprOrFn = exprOrFn;
       this.cb = cb;
       this.option = option;
-      this.id = id++; //watch的唯一标识
+      this.id = id++; //watcher的唯一标识
+      this.deps = []; //watcher记录有多少dep依赖它
+      this.depsid = new Set();
       if (typeof exprOrFn == "function") {
         this.getter = exprOrFn;
       }
       this.get();
     }
     _createClass(Watcher, [{
+      key: "addDep",
+      value: function addDep(dep) {
+        var id = dep.id;
+        if (!this.depsid.has(id)) {
+          this.deps.push(dep);
+          this.depsid.add(id);
+          dep.addSub(this);
+        }
+      }
+    }, {
       key: "get",
       value: function get() {
         pushTarget(this); //当前watcher实例
@@ -555,13 +634,42 @@
         popTarget();
       }
     }, {
+      key: "run",
+      value: function run() {
+        this.get();
+      }
+    }, {
       key: "update",
       value: function update() {
-        this.get(); //重新渲染
+        // this.get()//重新渲染
+        queueWatcher(this);
       }
     }]);
     return Watcher;
   }();
+  var queue = []; //将需要批处理更新的watcher存到一个队列中，稍后让watcher执行
+  var has = {};
+  var pending = false;
+  function flushSchedulerQueue() {
+    queue.forEach(function (watcher) {
+      watcher.run();
+      watcher.cb();
+    });
+    queue = [];
+    has = {};
+    pending = false;
+  }
+  function queueWatcher(watcher) {
+    var id = watcher.id;
+    if (has[id] == null) {
+      queue.push(watcher);
+      has[id] = true;
+      if (!pending) {
+        nextTick(flushSchedulerQueue);
+        pending = true;
+      }
+    }
+  }
 
   function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
@@ -577,7 +685,7 @@
     };
     //初始化创建watcher
     var watcher = new Watcher(vm, updateComponent, function () {
-      callHook(vm, 'beforeUpdate');
+      callHook(vm, 'updated');
     }, true);
     watcher.get();
     callHook(vm, 'mounted');
@@ -678,6 +786,7 @@
   initMixin(Vue); //init方法
   lifecycleMixin(Vue); //_update
   renderMixin(Vue); //_render
+  stateMixin(Vue);
 
   //静态方法
   initGlobalApi(Vue);
