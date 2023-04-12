@@ -30,6 +30,11 @@
         },
         updated(){
             console.log('updated')
+        },
+        watch:{
+            'a'(newValue,oldValue){
+                console.log(newValue,oldValue)
+            }
         }
     })
     //渲染操作：先找render方法，默认没有传入render方法会找template，最后找el中指定元素进行渲染
@@ -37,9 +42,9 @@
     vm.b.push(1)
     vm.a = 2
     vm.a = 3
-    console.log(vm.$el.innerHTML)
+    //console.log(vm.$el.innerHTML)
     vm.$nextTick(()=>{
-        console.log(vm.$el.innerHTML)
+        //console.log(vm.$el.innerHTML)
     })
 </script>
 </html>

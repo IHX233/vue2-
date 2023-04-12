@@ -31,6 +31,27 @@
       return _arr;
     }
   }
+  function ownKeys(object, enumerableOnly) {
+    var keys = Object.keys(object);
+    if (Object.getOwnPropertySymbols) {
+      var symbols = Object.getOwnPropertySymbols(object);
+      enumerableOnly && (symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      })), keys.push.apply(keys, symbols);
+    }
+    return keys;
+  }
+  function _objectSpread2(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var source = null != arguments[i] ? arguments[i] : {};
+      i % 2 ? ownKeys(Object(source), !0).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+    return target;
+  }
   function _typeof(obj) {
     "@babel/helpers - typeof";
 
@@ -61,6 +82,20 @@
       writable: false
     });
     return Constructor;
+  }
+  function _defineProperty(obj, key, value) {
+    key = _toPropertyKey(key);
+    if (key in obj) {
+      Object.defineProperty(obj, key, {
+        value: value,
+        enumerable: true,
+        configurable: true,
+        writable: true
+      });
+    } else {
+      obj[key] = value;
+    }
+    return obj;
   }
   function _slicedToArray(arr, i) {
     return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
@@ -122,8 +157,12 @@
   strats.data = function (parentVal, childValue) {
     return childValue;
   };
-  strats.computed = function () {};
-  strats.watch = function () {};
+  // strats.computed = function(){
+
+  // }
+  // strats.watch = function(){
+
+  // }
   function mergeHook(parentVal, childValue) {
     if (childValue) {
       if (parentVal) {
@@ -346,6 +385,98 @@
     return new Observe(data);
   }
 
+  var id = 0;
+  var Watcher = /*#__PURE__*/function () {
+    function Watcher(vm, exprOrFn, cb) {
+      var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+      _classCallCheck(this, Watcher);
+      this.vm = vm;
+      this.exprOrFn = exprOrFn;
+      this.cb = cb;
+      this.options = options;
+      this.user = options.user; //用户watcher标识
+      this.isWatcher = typeof options === "boolean"; //是渲染watch
+      this.id = id++; //watcher的唯一标识
+      this.deps = []; //watcher记录有多少dep依赖它
+      this.depsid = new Set();
+      if (typeof exprOrFn == "function") {
+        this.getter = exprOrFn;
+      } else {
+        this.getter = function () {
+          var path = exprOrFn.split('.');
+          var obj = vm;
+          for (var i = 0; i < path.length; i++) {
+            obj = obj[path[i]];
+          }
+          return obj;
+        };
+      }
+      this.value = this.get();
+    }
+    _createClass(Watcher, [{
+      key: "addDep",
+      value: function addDep(dep) {
+        var id = dep.id;
+        if (!this.depsid.has(id)) {
+          this.deps.push(dep);
+          this.depsid.add(id);
+          dep.addSub(this);
+        }
+      }
+    }, {
+      key: "get",
+      value: function get() {
+        pushTarget(this); //当前watcher实例
+        var result = this.getter();
+        popTarget();
+        return result;
+      }
+    }, {
+      key: "run",
+      value: function run() {
+        //用户watcher时取新老值
+        var newValue = this.get();
+        var oldValue = this.value;
+        this.value = newValue;
+        if (this.user) {
+          this.cb.call(this.vm, newValue, oldValue);
+        }
+      }
+    }, {
+      key: "update",
+      value: function update() {
+        // this.get()//重新渲染
+        queueWatcher(this);
+      }
+    }]);
+    return Watcher;
+  }();
+  var queue = []; //将需要批处理更新的watcher存到一个队列中，稍后让watcher执行
+  var has = {};
+  var pending = false;
+  function flushSchedulerQueue() {
+    queue.forEach(function (watcher) {
+      watcher.run();
+      if (watcher.isWatcher) {
+        watcher.cb();
+      }
+    });
+    queue = [];
+    has = {};
+    pending = false;
+  }
+  function queueWatcher(watcher) {
+    var id = watcher.id;
+    if (has[id] == null) {
+      queue.push(watcher);
+      has[id] = true;
+      if (!pending) {
+        nextTick(flushSchedulerQueue);
+        pending = true;
+      }
+    }
+  }
+
   function initState(vm) {
     var opt = vm.$options;
     if (opt.props) ;
@@ -354,7 +485,9 @@
     }
     if (opt.methods) ;
     if (opt.computed) ;
-    if (opt.watch) ;
+    if (opt.watch) {
+      initWatch(vm);
+    }
   }
   function initData(vm) {
     var data = vm.$options.data;
@@ -364,9 +497,47 @@
     }
     observe(data); //让对象重新定义set、get方法
   }
+  function initWatch(vm) {
+    var watch = vm.$options.watch;
+    var _loop = function _loop(key) {
+      var handler = watch[key];
+      if (Array.isArray(handler)) {
+        //数组
+        handler.forEach(function (handle) {
+          createWatcher(vm, key, handle);
+        });
+      } else {
+        //字符串、对象、函数
+        createWatcher(vm, key, handler);
+      }
+    };
+    for (var key in watch) {
+      _loop(key);
+    }
+  }
+  function createWatcher(vm, exprOrFn, handler) {
+    var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+    //options可以用来标识是用户watcher
+    if (_typeof(handler) == "object") {
+      options = handler;
+      handler = handler.handler;
+    }
+    if (typeof handler == "string") {
+      handler = vm[handler];
+    }
+    return vm.$watch(exprOrFn, handler, options);
+  }
   function stateMixin(Vue) {
     Vue.prototype.$nextTick = function (cb) {
       nextTick(cb);
+    };
+    Vue.prototype.$watch = function (exprOrFn, cb, options) {
+      new Watcher(this, exprOrFn, cb, _objectSpread2(_objectSpread2({}, options), {}, {
+        user: true
+      }));
+      if (options.immediate) {
+        cb();
+      }
     };
   }
 
@@ -596,77 +767,6 @@
         el.className = el["class"];
       } else {
         el.setAttribute(key, newProps[key]);
-      }
-    }
-  }
-
-  var id = 0;
-  var Watcher = /*#__PURE__*/function () {
-    function Watcher(vm, exprOrFn, cb, option) {
-      _classCallCheck(this, Watcher);
-      this.vm = vm;
-      this.exprOrFn = exprOrFn;
-      this.cb = cb;
-      this.option = option;
-      this.id = id++; //watcher的唯一标识
-      this.deps = []; //watcher记录有多少dep依赖它
-      this.depsid = new Set();
-      if (typeof exprOrFn == "function") {
-        this.getter = exprOrFn;
-      }
-      this.get();
-    }
-    _createClass(Watcher, [{
-      key: "addDep",
-      value: function addDep(dep) {
-        var id = dep.id;
-        if (!this.depsid.has(id)) {
-          this.deps.push(dep);
-          this.depsid.add(id);
-          dep.addSub(this);
-        }
-      }
-    }, {
-      key: "get",
-      value: function get() {
-        pushTarget(this); //当前watcher实例
-        this.getter();
-        popTarget();
-      }
-    }, {
-      key: "run",
-      value: function run() {
-        this.get();
-      }
-    }, {
-      key: "update",
-      value: function update() {
-        // this.get()//重新渲染
-        queueWatcher(this);
-      }
-    }]);
-    return Watcher;
-  }();
-  var queue = []; //将需要批处理更新的watcher存到一个队列中，稍后让watcher执行
-  var has = {};
-  var pending = false;
-  function flushSchedulerQueue() {
-    queue.forEach(function (watcher) {
-      watcher.run();
-      watcher.cb();
-    });
-    queue = [];
-    has = {};
-    pending = false;
-  }
-  function queueWatcher(watcher) {
-    var id = watcher.id;
-    if (has[id] == null) {
-      queue.push(watcher);
-      has[id] = true;
-      if (!pending) {
-        nextTick(flushSchedulerQueue);
-        pending = true;
       }
     }
   }

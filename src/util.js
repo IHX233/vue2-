@@ -29,12 +29,12 @@ const strats = []
 strats.data = function(parentVal,childValue){
     return childValue
 }
-strats.computed = function(){
+// strats.computed = function(){
     
-}
-strats.watch = function(){
+// }
+// strats.watch = function(){
     
-}
+// }
 function mergeHook(parentVal,childValue){
     if(childValue){
         if(parentVal){
