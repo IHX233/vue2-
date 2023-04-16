@@ -5,7 +5,7 @@ function genProps(attrs){
         let attr = attrs[i]
         if(attr.name === 'style'){//对样式的特殊处理
             let obj = {};
-            attr.value.split(';').foreach(item => {
+            attr.value.split(';').forEach(item => {
                 let [key,value] = item.split(':')
                 obj[key] = value
             })

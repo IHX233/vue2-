@@ -657,7 +657,7 @@
       if (attr.name === 'style') {
         //对样式的特殊处理
         var obj = {};
-        attr.value.split(';').foreach(function (item) {
+        attr.value.split(';').forEach(function (item) {
           var _item$split = item.split(':'),
             _item$split2 = _slicedToArray(_item$split, 2),
             key = _item$split2[0],
@@ -730,13 +730,33 @@
   }
 
   function patch(oldVnode, vnode) {
-    // console.log(oldVnode,vnode)
-    //虚拟dom转换为真实dom
-    var el = createElm(vnode); //产生真实dom
-    var parentElm = oldVnode.parentNode;
-    parentElm.insertBefore(el, oldVnode.nextSibling); //将新的节点插在老的节点前面
-    parentElm.removeChild(oldVnode); //删除老的节点
-    return el;
+    if (oldVnode.nodeType == 1) {
+      //真实节点
+      //虚拟dom转换为真实dom
+      var el = createElm(vnode); //产生真实dom
+      var parentElm = oldVnode.parentNode;
+      parentElm.insertBefore(el, oldVnode.nextSibling); //将新的节点插在老的节点前面
+      parentElm.removeChild(oldVnode); //删除老的节点
+      return el;
+    } else {
+      //在更新的时候拿老的虚拟节点和新的虚拟节点做对比，将不同的地方更新
+      //1.比较两个元素的标签，标签不一样直接替换掉
+      if (oldVnode.tag !== vnode.tag) {
+        return oldVnode.el.parentNode.replaceChild(createElm(vnode), oldVnode.el);
+      }
+      //2.标签一样，比对文本，文本节点的tag都是undefined
+      if (!oldVnode.tag) {
+        if (oldVnode.text !== vnode.text) {
+          return oldVnode.el.text = vnode.text;
+        }
+      }
+      //3.标签一样，并且需要开始比对标签的属性和儿子
+      //标签一样直接复用即可
+      vnode.el = oldVnode.el;
+      //更新属性，用新的虚拟节点的属性和老的比较，去更新节点
+      //新老属性对比
+      updateProperties(vnode, oldVnode.data);
+    }
   }
   function createElm(vnode) {
     var tag = vnode.tag,
@@ -756,17 +776,35 @@
     return vnode.el;
   }
   function updateProperties(vnode) {
+    var oldProps = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    var newProps = vnode.data || {};
     var el = vnode.el;
-    var newProps = vnode.data;
-    for (var key in newProps) {
-      if (key == "style") {
+    //老的有新的没有需要删除属性
+    for (var key in oldProps) {
+      if (!newProps[key]) {
+        el.removeAttribute(key);
+      }
+    }
+
+    //样式处理  老的：style={color:red}   新的：style={background:red}
+    var newStyle = newProps.style || {};
+    var oldStyle = oldProps.style || {};
+    for (var _key in oldStyle) {
+      if (!newStyle[_key]) {
+        el.style[_key] = "";
+      }
+    }
+
+    //新的有，直接用新的更新就行
+    for (var _key2 in newProps) {
+      if (_key2 == "style") {
         for (var styleName in newProps.style) {
           el.style[styleName] = newProps.style[styleName];
         }
-      } else if (key == "class") {
-        el.className = el["class"];
+      } else if (_key2 == "class") {
+        el.className = newProps["class"];
       } else {
-        el.setAttribute(key, newProps[key]);
+        el.setAttribute(_key2, newProps[_key2]);
       }
     }
   }
@@ -890,6 +928,24 @@
 
   //静态方法
   initGlobalApi(Vue);
+  var vm1 = new Vue({
+    data: {
+      name: 'ihx'
+    }
+  });
+  var render1 = compileToFunctions('<div id="app" style="color:red" class="a">{{name}}</div>');
+  var vnode1 = render1.call(vm1);
+  document.body.appendChild(createElm(vnode1));
+  var vm2 = new Vue({
+    data: {
+      name: 'gf'
+    }
+  });
+  var render2 = compileToFunctions('<div id="gf" style="color:green" class="b ">{{name}}</div>');
+  var vnode2 = render2.call(vm2);
+  setTimeout(function () {
+    patch(vnode1, vnode2);
+  }, 1000);
 
   return Vue;
 
