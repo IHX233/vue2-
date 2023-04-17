@@ -24,8 +24,49 @@ export function patch(oldVnode,vnode){
         //更新属性，用新的虚拟节点的属性和老的比较，去更新节点
         //新老属性对比
         updateProperties(vnode,oldVnode.data)
+        let oldChildren = oldVnode.children || []
+        let newChildren = vnode.children || []
+        if(oldChildren.length>0&&newChildren.length>0){//新老都有孩子
+            updateChildren(oldChildren,newChildren,el)
+        }else if(oldChildren.length>0){//新的没有
+            el.innerHTML = ''
+        }else if(newChildren.length>0){//老的没有
+            for(let i=0;i<newChildren.length;i++){
+                let child = newChildren[i]
+                el.appendChild(createElm(child))
+            }
+            
+        }
     }
     
+}
+function isSameVnode(oldVnode,newVnode){
+    return (oldVnode.tag == newVnode.tag)&&(oldVnode.key == newVnode.key)
+}
+function updateChildren(oldChildren,newChildren,parent){
+    let oldStartIndex = 0
+    let oldStartVnode = oldChildren[0]
+    let oldEndIndex = oldChildren.length - 1
+    let oldEndVnode = oldChildren[oldEndIndex]
+
+    let newStartIndex = 0
+    let newStartVnode = newChildren[0]
+    let newEndIndex = newChildren.length - 1
+    let newEndVnode = newChildren[newEndIndex]
+    //做一个循环，同时循环老的和新的，哪个先结束，循环就停止，将多余的删除或添加进去
+    while(oldStartIndex<=oldEndIndex&&newStartIndex<=newEndIndex){
+        if(isSameVnode(oldEndVnode,newEndVnode)){//如果是同一个元素，比对儿子
+            patch(oldStartVnode,newStartVnode)//更新属性，递归更新儿子
+            oldStartVnode = oldChildren[++oldStartIndex]
+            newStartVnode = newChildren[++newStartIndex]
+        }
+    }
+    if(newStartIndex<=newEndIndex){
+        for(let i = newStartIndex;i<=newEndIndex;i++){
+            //将新的多的插入
+            parent.appendChild(createElm(newChildren[i]))
+        }
+    }
 }
 export function createElm(vnode){
     let {tag,children,key,data,text} = vnode

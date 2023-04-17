@@ -752,10 +752,53 @@
       }
       //3.标签一样，并且需要开始比对标签的属性和儿子
       //标签一样直接复用即可
-      vnode.el = oldVnode.el;
+      var _el = vnode.el = oldVnode.el;
       //更新属性，用新的虚拟节点的属性和老的比较，去更新节点
       //新老属性对比
       updateProperties(vnode, oldVnode.data);
+      var oldChildren = oldVnode.children || [];
+      var newChildren = vnode.children || [];
+      if (oldChildren.length > 0 && newChildren.length > 0) {
+        //新老都有孩子
+        updateChildren(oldChildren, newChildren, _el);
+      } else if (oldChildren.length > 0) {
+        //新的没有
+        _el.innerHTML = '';
+      } else if (newChildren.length > 0) {
+        //老的没有
+        for (var i = 0; i < newChildren.length; i++) {
+          var child = newChildren[i];
+          _el.appendChild(createElm(child));
+        }
+      }
+    }
+  }
+  function isSameVnode(oldVnode, newVnode) {
+    return oldVnode.tag == newVnode.tag && oldVnode.key == newVnode.key;
+  }
+  function updateChildren(oldChildren, newChildren, parent) {
+    var oldStartIndex = 0;
+    var oldStartVnode = oldChildren[0];
+    var oldEndIndex = oldChildren.length - 1;
+    var oldEndVnode = oldChildren[oldEndIndex];
+    var newStartIndex = 0;
+    var newStartVnode = newChildren[0];
+    var newEndIndex = newChildren.length - 1;
+    var newEndVnode = newChildren[newEndIndex];
+    //做一个循环，同时循环老的和新的，哪个先结束，循环就停止，将多余的删除或添加进去
+    while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
+      if (isSameVnode(oldEndVnode, newEndVnode)) {
+        //如果是同一个元素，比对儿子
+        patch(oldStartVnode, newStartVnode); //更新属性，递归更新儿子
+        oldStartVnode = oldChildren[++oldStartIndex];
+        newStartVnode = newChildren[++newStartIndex];
+      }
+    }
+    if (newStartIndex <= newEndIndex) {
+      for (var i = newStartIndex; i <= newEndIndex; i++) {
+        //将新的多的插入
+        parent.appendChild(createElm(newChildren[i]));
+      }
     }
   }
   function createElm(vnode) {
@@ -933,7 +976,7 @@
       name: 'ihx'
     }
   });
-  var render1 = compileToFunctions('<div id="app" style="color:red" class="a">{{name}}</div>');
+  var render1 = compileToFunctions("<div>\n    <li style=\"background:red\">A</li>\n    <li style=\"background:pink\">B</li>\n    <li style=\"background:yellow\">C</li>\n    <li style=\"background:green\">D</li>\n</div>");
   var vnode1 = render1.call(vm1);
   document.body.appendChild(createElm(vnode1));
   var vm2 = new Vue({
@@ -941,7 +984,7 @@
       name: 'gf'
     }
   });
-  var render2 = compileToFunctions('<div id="gf" style="color:green" class="b ">{{name}}</div>');
+  var render2 = compileToFunctions("<div>\n<li style=\"background:purple\">A</li>\n<li style=\"background:pink\">B</li>\n<li style=\"background:yellow\">C</li>\n<li style=\"background:green\">D</li>\n<li style=\"background:blue\">E</li>\n</div>");
   var vnode2 = render2.call(vm2);
   setTimeout(function () {
     patch(vnode1, vnode2);
