@@ -27,7 +27,7 @@ class Observe{
     }
 }
 function defineReactive(data,key,value){
-    //或取数组对应的dep
+    //获取数组对应的dep
     let childDep = observe(value);//如果值为对象，继续监控
     let dep = new Dep()
     Object.defineProperty(data,key,{

@@ -80,8 +80,8 @@ function flushCallbacks(){
         let cb = callbacks.pop()
         cb()
     }
-    callbacks.forEach(cb=>cb())
-    callbacks = []
+    // callbacks.forEach(cb=>cb())
+    // callbacks = []
     pending = false
 }
 let timerFunc

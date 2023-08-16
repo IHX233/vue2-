@@ -1,6 +1,6 @@
 let oldArrayProtoMethods = Array.prototype
 export let arrayMethods = Object.create(oldArrayProtoMethods)
-let methods = ['push','pop','shift','shift','reverse','sort','splice']
+let methods = ['push','pop','shift','unshift','reverse','sort','splice']
 methods.forEach(method => {
     arrayMethods[method] = function(...args){
         //当调用数组劫持的七个方法时触发更新

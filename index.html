@@ -7,44 +7,55 @@
     <title>Document</title>
 </head>
 <body>
-    <div id="app">hello<div>1{{a}}{{b}}2</div></div>
+    <div id="app"><div>{{fullName}}</div></div>
 </body>
 <script src="../dist/umd/vue.js"></script>
 <script>
     //混入
-    Vue.mixin({
-        created(){
-            console.log('created')
-        }
-    })
+    // Vue.mixin({
+    //     created(){
+    //         //console.log('created')
+    //     }
+    // })
     let vm = new Vue({
         el:'#app',
         data(){
             return {
-                a:1,
-                b:[{c:2}]
+                // a:1,
+                // b:[{c:2}],
+                firstName:"z",
+                endName:"s"
             }
         },
         created(){
-            console.log('created1')
+            //console.log('created1')
         },
         updated(){
-            console.log('updated')
+            //console.log('updated')
         },
-        watch:{
-            'a'(newValue,oldValue){
-                console.log(newValue,oldValue)
+        computed:{
+            fullName(){
+                return this.firstName + this.endName
             }
-        }
+        },
+        // watch:{
+        //     'a'(newValue,oldValue){
+        //         //console.log(newValue,oldValue)
+        //     }
+        // }
     })
+
+    setTimeout(() => {
+        vm.firstName = '11111'
+    }, 3000);
     //渲染操作：先找render方法，默认没有传入render方法会找template，最后找el中指定元素进行渲染
     //ast解析：把template转化为render方法
-    vm.b.push(1)
-    vm.a = 2
-    vm.a = 3
-    //console.log(vm.$el.innerHTML)
-    vm.$nextTick(()=>{
-        //console.log(vm.$el.innerHTML)
-    })
+    // vm.b.push(1)
+    // vm.a = 2
+    // vm.a = 3
+    // //console.log(vm.$el.innerHTML)
+    // vm.$nextTick(()=>{
+    //     //console.log(vm.$el.innerHTML)
+    // })
 </script>
 </html>

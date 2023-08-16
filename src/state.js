@@ -1,3 +1,4 @@
+import Dep from "./observe/dep.js"
 import { observe } from "./observe/index.js"
 import Watcher from "./observe/watcher.js"
 import {proxy,nextTick} from "./util.js"
@@ -35,8 +36,49 @@ function initData(vm){
 function initMethods(){
 
 }
-function initComputed(){
+function initComputed(vm){
+    //需要有watcher 还需要通过defineProperty dirty
+    let computed = vm.$options.computed
+    let watchers = vm._computedWatchers = {}
+    for(let key in computed){
+        const userDef = computed[key]
+        const getter = typeof userDef == "function"?userDef:userDef.get
+        watchers[key] = new Watcher(vm,getter,()=>{},{lazy:true})
+        defineComputed(vm,key,userDef)
 
+    }
+}
+
+function defineComputed(target,key,userDef){
+    let sharedPropertyDefiniton = {
+        enumerable:true,
+        configurable:true,
+        get:()=>{},
+        set:()=>{}
+    }
+    if(typeof userDef == "function"){
+        sharedPropertyDefiniton.get = createComputedGetter(key)
+    }else{
+        sharedPropertyDefiniton.get = createComputedGetter(key)
+        sharedPropertyDefiniton.set = userDef.set 
+    }
+    Object.defineProperty(target,key,sharedPropertyDefiniton)
+}
+function createComputedGetter(key){
+    return function(){
+        const watcher = this._computedWatchers[key]
+        if(watcher){
+            if(watcher.dirty){
+                watcher.evaluate()
+            }
+            if(Dep.target){//说明还有渲染watcher，应该一起收集起来
+                watcher.depend()//计算属性watcher
+            }
+
+            return watcher.value
+        }
+        
+    }
 }
 function initWatch(vm){
     let watch = vm.$options.watch

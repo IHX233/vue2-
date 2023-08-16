@@ -1,6 +1,6 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('rollup')) :
+  typeof define === 'function' && define.amd ? define(['rollup'], factory) :
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Vue = factory());
 })(this, (function () { 'use strict';
 
@@ -134,6 +134,48 @@
     return typeof key === "symbol" ? key : String(key);
   }
 
+  var id$1 = 0;
+  var Dep = /*#__PURE__*/function () {
+    function Dep() {
+      _classCallCheck(this, Dep);
+      this.subs = [];
+      this.id = id$1++;
+    }
+    _createClass(Dep, [{
+      key: "depend",
+      value: function depend() {
+        //dep存放watch，watch也存放dep
+        Dep.target.addDep(this);
+      }
+    }, {
+      key: "addSub",
+      value: function addSub(watcher) {
+        this.subs.push(watcher);
+      }
+    }, {
+      key: "notify",
+      value: function notify() {
+        this.subs.forEach(function (watcher) {
+          return watcher.update();
+        });
+      }
+    }]);
+    return Dep;
+  }();
+  Dep.target = null;
+  var stack = [];
+  function pushTarget(watcher) {
+    Dep.target = watcher;
+    stack.push(watcher);
+  }
+  function popTarget() {
+    stack.pop();
+    Dep.target = stack[stack.length - 1];
+  }
+  //多对多的关系，一个属性有一个dep来收集watcher
+  //dep可以存多个watch
+  //一个watch可以对应多个dep
+
   function proxy(vm, data, key) {
     Object.defineProperty(vm, key, {
       get: function get() {
@@ -209,10 +251,8 @@
       var cb = callbacks.pop();
       cb();
     }
-    callbacks.forEach(function (cb) {
-      return cb();
-    });
-    callbacks = [];
+    // callbacks.forEach(cb=>cb())
+    // callbacks = []
     pending$1 = false;
   }
   var timerFunc;
@@ -250,7 +290,7 @@
 
   var oldArrayProtoMethods = Array.prototype;
   var arrayMethods = Object.create(oldArrayProtoMethods);
-  var methods = ['push', 'pop', 'shift', 'shift', 'reverse', 'sort', 'splice'];
+  var methods = ['push', 'pop', 'shift', 'unshift', 'reverse', 'sort', 'splice'];
   methods.forEach(function (method) {
     arrayMethods[method] = function () {
       for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
@@ -277,45 +317,6 @@
       return result;
     };
   });
-
-  var id$1 = 0;
-  var Dep = /*#__PURE__*/function () {
-    function Dep() {
-      _classCallCheck(this, Dep);
-      this.subs = [];
-      this.id = id$1++;
-    }
-    _createClass(Dep, [{
-      key: "depend",
-      value: function depend() {
-        //dep存放watch，watch也存放dep
-        Dep.target.addDep(this);
-      }
-    }, {
-      key: "addSub",
-      value: function addSub(watcher) {
-        this.subs.push(watcher);
-      }
-    }, {
-      key: "notify",
-      value: function notify() {
-        this.subs.forEach(function (watcher) {
-          return watcher.update();
-        });
-      }
-    }]);
-    return Dep;
-  }();
-  Dep.target = null;
-  function pushTarget(watcher) {
-    Dep.target = watcher;
-  }
-  function popTarget() {
-    Dep.target = null;
-  }
-  //多对多的关系，一个属性有一个dep来收集watcher
-  //dep可以存多个watch
-  //一个watch可以对应多个dep
 
   var Observe = /*#__PURE__*/function () {
     function Observe(value) {
@@ -349,7 +350,7 @@
     return Observe;
   }();
   function defineReactive(data, key, value) {
-    //或取数组对应的dep
+    //获取数组对应的dep
     var childDep = observe(value); //如果值为对象，继续监控
     var dep = new Dep();
     Object.defineProperty(data, key, {
@@ -396,6 +397,8 @@
       this.options = options;
       this.user = options.user; //用户watcher标识
       this.isWatcher = typeof options === "boolean"; //是渲染watch
+      this.lazy = options.lazy; //如果watcher上有lazy属性，就是一个计算属性
+      this.dirty = this.lazy; //ditty代表取值时是否执行用户的方法
       this.id = id++; //watcher的唯一标识
       this.deps = []; //watcher记录有多少dep依赖它
       this.depsid = new Set();
@@ -411,7 +414,7 @@
           return obj;
         };
       }
-      this.value = this.get();
+      this.value = this.lazy ? 0 : this.get();
     }
     _createClass(Watcher, [{
       key: "addDep",
@@ -426,8 +429,9 @@
     }, {
       key: "get",
       value: function get() {
+        //组件挂载的时候会调用一次get，此时getter是渲染页面，会触发definedProperty的get方法收集watcher依赖，所以要在这之前pushTarget然后再popTarget
         pushTarget(this); //当前watcher实例
-        var result = this.getter();
+        var result = this.getter.call(this.vm);
         popTarget();
         return result;
       }
@@ -446,7 +450,26 @@
       key: "update",
       value: function update() {
         // this.get()//重新渲染
-        queueWatcher(this);
+        if (this.lazy) {
+          //计算属性watcher不用更新页面
+          this.dirty = true; //页面重新渲染就能获取最新的值 
+        } else {
+          queueWatcher(this);
+        }
+      }
+    }, {
+      key: "evaluate",
+      value: function evaluate() {
+        this.value = this.get();
+        this.dirty = false;
+      }
+    }, {
+      key: "depend",
+      value: function depend() {
+        var i = this.deps.length;
+        while (i--) {
+          this.deps[i].depend();
+        }
       }
     }]);
     return Watcher;
@@ -484,7 +507,9 @@
       initData(vm);
     }
     if (opt.methods) ;
-    if (opt.computed) ;
+    if (opt.computed) {
+      initComputed(vm);
+    }
     if (opt.watch) {
       initWatch(vm);
     }
@@ -496,6 +521,50 @@
       proxy(vm, '_data', key);
     }
     observe(data); //让对象重新定义set、get方法
+  }
+  function initComputed(vm) {
+    //需要有watcher 还需要通过defineProperty dirty
+    var computed = vm.$options.computed;
+    var watchers = vm._computedWatchers = {};
+    for (var key in computed) {
+      var userDef = computed[key];
+      var getter = typeof userDef == "function" ? userDef : userDef.get;
+      watchers[key] = new Watcher(vm, getter, function () {}, {
+        lazy: true
+      });
+      defineComputed(vm, key, userDef);
+    }
+  }
+  function defineComputed(target, key, userDef) {
+    var sharedPropertyDefiniton = {
+      enumerable: true,
+      configurable: true,
+      get: function get() {},
+      set: function set() {}
+    };
+    if (typeof userDef == "function") {
+      sharedPropertyDefiniton.get = createComputedGetter(key);
+    } else {
+      sharedPropertyDefiniton.get = createComputedGetter(key);
+      sharedPropertyDefiniton.set = userDef.set;
+    }
+    Object.defineProperty(target, key, sharedPropertyDefiniton);
+  }
+  function createComputedGetter(key) {
+    return function () {
+      var watcher = this._computedWatchers[key];
+      if (watcher) {
+        if (watcher.dirty) {
+          watcher.evaluate();
+        }
+        if (Dep.target) {
+          //说明还有渲染watcher，应该一起收集起来
+          watcher.depend(); //计算属性watcher
+        }
+
+        return watcher.value;
+      }
+    };
   }
   function initWatch(vm) {
     var watch = vm.$options.watch;
@@ -622,6 +691,7 @@
       //截取更新html
       html = html.substring(n);
     }
+    //创建当前被解析html标签的ast语法结构
     function parseStartTag() {
       var start = html.match(startTagOpen);
       if (start) {
@@ -718,12 +788,10 @@
   function compileToFunctions(template) {
     //1.将html转化为ast语法树
     var ast = parseHtml(template);
-
     //2.优化静态节点
 
     //3.通过这棵树重新生成代码
     var code = generate(ast);
-
     //4.将字符串变成函数 限制取值范围 通过with进行取值 之后通过render函数就可以改变this 让这个函数内部取到结果
     var render = new Function("with(this){return ".concat(code, "}"));
     return render;
@@ -747,7 +815,10 @@
       //2.标签一样，比对文本，文本节点的tag都是undefined
       if (!oldVnode.tag) {
         if (oldVnode.text !== vnode.text) {
-          return oldVnode.el.text = vnode.text;
+          // oldVnode.el.data = vnode.text
+          // oldVnode.el.nodeValue = vnode.text
+          // oldVnode.el.textContent = vnode.text
+          return oldVnode.el.textContent = vnode.text;
         }
       }
       //3.标签一样，并且需要开始比对标签的属性和儿子
@@ -776,6 +847,15 @@
   function isSameVnode(oldVnode, newVnode) {
     return oldVnode.tag == newVnode.tag && oldVnode.key == newVnode.key;
   }
+  function makeInedexByKey(children) {
+    var map = {};
+    children.forEach(function (item, index) {
+      if (item.key) {
+        map[item.key] = index;
+      }
+    });
+    return map;
+  }
   function updateChildren(oldChildren, newChildren, parent) {
     var oldStartIndex = 0;
     var oldStartVnode = oldChildren[0];
@@ -785,12 +865,47 @@
     var newStartVnode = newChildren[0];
     var newEndIndex = newChildren.length - 1;
     var newEndVnode = newChildren[newEndIndex];
+    var map = makeInedexByKey(oldChildren);
     //做一个循环，同时循环老的和新的，哪个先结束，循环就停止，将多余的删除或添加进去
     while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
-      if (isSameVnode(oldEndVnode, newEndVnode)) {
+      if (!oldStartVnode) {
+        //null
+        oldStartVnode = oldChildren[++oldStartIndex];
+      }
+      //头头比
+      else if (isSameVnode(oldStartVnode, newStartVnode)) {
         //如果是同一个元素，比对儿子
         patch(oldStartVnode, newStartVnode); //更新属性，递归更新儿子
         oldStartVnode = oldChildren[++oldStartIndex];
+        newStartVnode = newChildren[++newStartIndex];
+        //尾尾比
+      } else if (isSameVnode(oldEndVnode, newEndVnode)) {
+        patch(oldEndVnode, newEndVnode);
+        oldEndVnode = oldChildren[--oldEndIndex];
+        newEndVnode = newChildren[--newEndIndex];
+        //头尾比
+      } else if (isSameVnode(oldStartVnode, newEndVnode)) {
+        patch(oldStartVnode, newEndVnode);
+        //将当前元素插到尾部的下一个元素前面
+        parent.insertBefore(oldStartVnode.el, oldEndVnode.el.nextSibling);
+        oldStartVnode = oldChildren[++oldStartIndex];
+        newEndVnode = newChildren[--newEndIndex];
+      } else if (isSameVnode(oldEndVnode, newStartVnode)) {
+        patch(oldEndVnode, newStartVnode);
+        parent.insertBefore(oldEndVnode.el, oldStartVnode.el);
+        oldEndVnode = oldChildren[--oldEndIndex];
+        newStartVnode = newChildren[++newStartIndex];
+      } else {
+        //暴力对比
+        var moveIndex = map[newStartVnode.key];
+        if (moveIndex == undefined) {
+          parent.insertBefore(createElm(newStartVnode), oldStartVnode.el);
+        } else {
+          var moveVNode = oldChildren[moveIndex];
+          oldChildren[moveIndex] = null;
+          parent.insertBefore(moveVNode.el, oldStartVnode.el);
+          patch(moveVNode, newStartVnode);
+        }
         newStartVnode = newChildren[++newStartIndex];
       }
     }
@@ -798,6 +913,14 @@
       for (var i = newStartIndex; i <= newEndIndex; i++) {
         //将新的多的插入
         parent.appendChild(createElm(newChildren[i]));
+      }
+    }
+    if (oldStartIndex <= oldEndIndex) {
+      for (var _i = oldStartIndex; _i <= oldEndIndex; _i++) {
+        var child = oldChildren[_i];
+        if (child != undefined) {
+          parent.removeChild(child.el);
+        }
       }
     }
   }
@@ -855,8 +978,15 @@
   function lifecycleMixin(Vue) {
     Vue.prototype._update = function (vnode) {
       var vm = this;
-      //用新创建的元素，替换老的vm.$el
-      vm.$el = patch(vm.$el, vnode);
+      var prevVnode = vm._vnode;
+      //是否是首次渲染
+      if (!prevVnode) {
+        //用新创建的元素，替换老的vm.$el
+        vm.$el = patch(vm.$el, vnode);
+        vm._vnode = vnode;
+      } else {
+        vm.$el = patch(prevVnode, vnode);
+      }
     };
   }
   function mountComponent(vm, el) {
@@ -865,10 +995,10 @@
       vm._update(vm._render());
     };
     //初始化创建watcher
-    var watcher = new Watcher(vm, updateComponent, function () {
+    new Watcher(vm, updateComponent, function () {
       callHook(vm, 'updated');
     }, true);
-    watcher.get();
+    // watcher.get()
     callHook(vm, 'mounted');
   }
   function callHook(vm, hook) {
@@ -971,24 +1101,30 @@
 
   //静态方法
   initGlobalApi(Vue);
-  var vm1 = new Vue({
-    data: {
-      name: 'ihx'
-    }
-  });
-  var render1 = compileToFunctions("<div>\n    <li style=\"background:red\">A</li>\n    <li style=\"background:pink\">B</li>\n    <li style=\"background:yellow\">C</li>\n    <li style=\"background:green\">D</li>\n</div>");
-  var vnode1 = render1.call(vm1);
-  document.body.appendChild(createElm(vnode1));
-  var vm2 = new Vue({
-    data: {
-      name: 'gf'
-    }
-  });
-  var render2 = compileToFunctions("<div>\n<li style=\"background:purple\">A</li>\n<li style=\"background:pink\">B</li>\n<li style=\"background:yellow\">C</li>\n<li style=\"background:green\">D</li>\n<li style=\"background:blue\">E</li>\n</div>");
-  var vnode2 = render2.call(vm2);
-  setTimeout(function () {
-    patch(vnode1, vnode2);
-  }, 1000);
+
+  // import { compileToFunctions } from "./compiler/index";
+  // import {createElm, patch} from "./vdom/patch"
+  // let vm1 = new Vue({data:{name:'ihx'}})
+  // let render1 = compileToFunctions(`<div>
+  //     <li style="background:red">A</li>
+  //     <li style="background:pink">B</li>
+  //     <li style="background:yellow">C</li>
+  //     <li style="background:green">D</li>
+  // </div>`)
+  // let vnode1 = render1.call(vm1)
+  // document.body.appendChild(createElm(vnode1))
+  // let vm2 = new Vue({data:{name:'gf'}})
+  // let render2 = compileToFunctions(`<div>
+  // <li style="background:purple">A</li>
+  // <li style="background:pink">B</li>
+  // <li style="background:yellow">C</li>
+  // <li style="background:green">D</li>
+  // <li style="background:blue">E</li>
+  // </div>`)
+  // let vnode2 = render2.call(vm2)
+  // setTimeout(()=>{
+  //     patch(vnode1,vnode2)
+  // },1000)
 
   return Vue;
 

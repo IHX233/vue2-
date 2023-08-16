@@ -1,5 +1,6 @@
 import {pushTarget,popTarget} from './dep'
 import {nextTick} from "../util"
+import { watch } from 'rollup'
 let id = 0
 class Watcher{
     constructor(vm,exprOrFn,cb,options={}){
@@ -9,6 +10,8 @@ class Watcher{
         this.options = options
         this.user = options.user//用户watcher标识
         this.isWatcher = typeof options === "boolean"//是渲染watch
+        this.lazy = options.lazy //如果watcher上有lazy属性，就是一个计算属性
+        this.dirty = this.lazy //ditty代表取值时是否执行用户的方法
         this.id = id++ //watcher的唯一标识
         this.deps = [] //watcher记录有多少dep依赖它
         this.depsid = new Set()
@@ -24,7 +27,7 @@ class Watcher{
                 return obj 
             }
         }
-        this.value = this.get()
+        this.value = this.lazy? 0 :this.get()
     }
     addDep(dep){
         let id = dep.id
@@ -35,8 +38,9 @@ class Watcher{
         }
     }
     get(){
+        //组件挂载的时候会调用一次get，此时getter是渲染页面，会触发definedProperty的get方法收集watcher依赖，所以要在这之前pushTarget然后再popTarget
         pushTarget(this)//当前watcher实例
-        let result = this.getter()
+        let result = this.getter.call(this.vm)
         popTarget()
         return result
     }
@@ -51,7 +55,22 @@ class Watcher{
     }
     update(){
         // this.get()//重新渲染
-        queueWatcher(this)
+        if(this.lazy){//计算属性watcher不用更新页面
+            this.dirty = true //页面重新渲染就能获取最新的值 
+        }else{
+            queueWatcher(this)
+        }
+        
+    }
+    evaluate(){
+        this.value = this.get()
+        this.dirty = false 
+    }
+    depend(){
+        let i = this.deps.length
+        while(i--){
+            this.deps[i].depend()
+        }
     }
 }
 let queue = []//将需要批处理更新的watcher存到一个队列中，稍后让watcher执行

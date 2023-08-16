@@ -77,6 +77,7 @@ export function parseHtml(html){
     function advance(n){//截取更新html
         html = html.substring(n)
     }
+    //创建当前被解析html标签的ast语法结构
     function parseStartTag(){
         const start = html.match(startTagOpen)
         if(start){

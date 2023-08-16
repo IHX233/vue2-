@@ -15,7 +15,10 @@ export function patch(oldVnode,vnode){
         //2.标签一样，比对文本，文本节点的tag都是undefined
         if(!oldVnode.tag){
             if(oldVnode.text!==vnode.text){
-                return oldVnode.el.text = vnode.text
+                // oldVnode.el.data = vnode.text
+                // oldVnode.el.nodeValue = vnode.text
+                // oldVnode.el.textContent = vnode.text
+                return oldVnode.el.textContent = vnode.text
             }
         }
         //3.标签一样，并且需要开始比对标签的属性和儿子
@@ -43,6 +46,15 @@ export function patch(oldVnode,vnode){
 function isSameVnode(oldVnode,newVnode){
     return (oldVnode.tag == newVnode.tag)&&(oldVnode.key == newVnode.key)
 }
+function makeInedexByKey(children){
+    let map = {}
+    children.forEach((item,index)=>{
+        if(item.key){ 
+            map[item.key] = index
+        }
+    })
+    return map
+}
 function updateChildren(oldChildren,newChildren,parent){
     let oldStartIndex = 0
     let oldStartVnode = oldChildren[0]
@@ -53,18 +65,61 @@ function updateChildren(oldChildren,newChildren,parent){
     let newStartVnode = newChildren[0]
     let newEndIndex = newChildren.length - 1
     let newEndVnode = newChildren[newEndIndex]
+    let map = makeInedexByKey(oldChildren)
     //做一个循环，同时循环老的和新的，哪个先结束，循环就停止，将多余的删除或添加进去
     while(oldStartIndex<=oldEndIndex&&newStartIndex<=newEndIndex){
-        if(isSameVnode(oldEndVnode,newEndVnode)){//如果是同一个元素，比对儿子
+        if(!oldStartVnode){//null
+            oldStartVnode = oldChildren[++oldStartIndex]
+        }
+        //头头比
+        else if(isSameVnode(oldStartVnode,newStartVnode)){//如果是同一个元素，比对儿子
             patch(oldStartVnode,newStartVnode)//更新属性，递归更新儿子
             oldStartVnode = oldChildren[++oldStartIndex]
             newStartVnode = newChildren[++newStartIndex]
+            //尾尾比
+        }else if(isSameVnode(oldEndVnode,newEndVnode)){
+            patch(oldEndVnode,newEndVnode)
+            oldEndVnode = oldChildren[--oldEndIndex]
+            newEndVnode = newChildren[--newEndIndex]
+            //头尾比
+        }else if(isSameVnode(oldStartVnode,newEndVnode)){
+            patch(oldStartVnode,newEndVnode)
+            //将当前元素插到尾部的下一个元素前面
+            parent.insertBefore(oldStartVnode.el,oldEndVnode.el.nextSibling)
+            oldStartVnode = oldChildren[++oldStartIndex]
+            newEndVnode = newChildren[--newEndIndex]
+        }else if(isSameVnode(oldEndVnode,newStartVnode)){
+            patch(oldEndVnode,newStartVnode)
+            parent.insertBefore(oldEndVnode.el,oldStartVnode.el)
+            oldEndVnode = oldChildren[--oldEndIndex]
+            newStartVnode = newChildren[++newStartIndex]
+        }else{
+            //暴力对比
+            let moveIndex = map[newStartVnode.key]
+            if(moveIndex == undefined){
+                parent.insertBefore(createElm(newStartVnode),oldStartVnode.el)
+            }else{
+                let moveVNode = oldChildren[moveIndex]
+                oldChildren[moveIndex] = null
+                parent.insertBefore(moveVNode.el,oldStartVnode.el)
+                patch(moveVNode,newStartVnode)
+            }
+            newStartVnode = newChildren[++newStartIndex]
+            
         }
     }
     if(newStartIndex<=newEndIndex){
         for(let i = newStartIndex;i<=newEndIndex;i++){
             //将新的多的插入
             parent.appendChild(createElm(newChildren[i]))
+        }
+    }
+    if(oldStartIndex <= oldEndIndex){
+        for(let i =oldStartIndex;i<=oldEndIndex;i++){
+            let child = oldChildren[i]
+            if(child!=undefined){
+                parent.removeChild(child.el)
+            }
         }
     }
 }
