@@ -25,10 +25,20 @@ export const LIFECYCLE_HOOKS = [
     'beforeDestroy',
     'destroyed '
 ]
-const strats = []
-strats.data = function(parentVal,childValue){
-    return childValue
+const strats = {}
+strats.components = function(parentVal,childVal){
+    const res = Object.create(parentVal) //res._proto_ = parentVal
+    if(childVal){
+        for(let key in childVal){
+            res[key] = childVal[key]
+        }
+    }
+    return res
+
 }
+// strats.data = function(parentVal,childVal){
+//     return childVal
+// }
 // strats.computed = function(){
     
 // }
@@ -64,12 +74,17 @@ export function mergeOptions(parent,child){
 
     }
     function mergeField(key){//合并字段
+        
         if(strats[key]){
             options[key] = strats[key](parent[key],child[key])
         }else{
-            options[key] = child[key]
+            if(child[key]){
+                options[key] = child[key]
+            }else{
+                options[key] = parent[key]
+            }
+            
         }
-        
     }
     return options
 }
@@ -114,3 +129,17 @@ export function nextTick(cb){
     }
     
 }
+function makeMap(){
+    const mapping = {}
+    const list = str.split(",")
+    for(let i = 0;i<list.length;i++){
+        mapping[list[i]] = true
+    }
+    return (key)=>{
+        return mapping[key]
+    }
+}
+
+export const isReservedTag = makeMap(
+    'a,div,img,image,text,span,p,button,input,textarea,ul,li'
+)

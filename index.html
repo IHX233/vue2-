@@ -19,6 +19,14 @@
     // })
     let vm = new Vue({
         el:'#app',
+        components:{
+            aa:{
+                template:'<div>hello</div>'
+            },
+            bb:{
+                template:'<div>world</div>' 
+            }
+        },
         data(){
             return {
                 // a:1,
@@ -44,7 +52,7 @@
         //     }
         // }
     })
-
+    console.log(vm)
     setTimeout(() => {
         vm.firstName = '11111'
     }, 3000);

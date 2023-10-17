@@ -195,10 +195,19 @@
     });
   }
   var LIFECYCLE_HOOKS = ['beforeCreate', 'created', 'beforeMount', 'mounted', 'beforeUpdate', 'updated', 'beforeDestroy', 'destroyed '];
-  var strats = [];
-  strats.data = function (parentVal, childValue) {
-    return childValue;
+  var strats = {};
+  strats.components = function (parentVal, childVal) {
+    var res = Object.create(parentVal); //res._proto_ = parentVal
+    if (childVal) {
+      for (var key in childVal) {
+        res[key] = childVal[key];
+      }
+    }
+    return res;
   };
+  // strats.data = function(parentVal,childVal){
+  //     return childVal
+  // }
   // strats.computed = function(){
 
   // }
@@ -220,7 +229,7 @@
   LIFECYCLE_HOOKS.forEach(function (hook) {
     strats[hook] = mergeHook;
   });
-  function mergeOptions(parent, child) {
+  function mergeOptions$1(parent, child) {
     var options = {};
     //遍历父亲
     for (var key in parent) {
@@ -236,10 +245,15 @@
     }
     function mergeField(key) {
       //合并字段
+
       if (strats[key]) {
         options[key] = strats[key](parent[key], child[key]);
       } else {
-        options[key] = child[key];
+        if (child[key]) {
+          options[key] = child[key];
+        } else {
+          options[key] = parent[key];
+        }
       }
     }
     return options;
@@ -287,6 +301,17 @@
       pending$1 = true;
     }
   }
+  function makeMap() {
+    var mapping = {};
+    var list = str.split(",");
+    for (var i = 0; i < list.length; i++) {
+      mapping[list[i]] = true;
+    }
+    return function (key) {
+      return mapping[key];
+    };
+  }
+  var isReservedTag = makeMap();
 
   var oldArrayProtoMethods = Array.prototype;
   var arrayMethods = Object.create(oldArrayProtoMethods);
@@ -924,6 +949,16 @@
       }
     }
   }
+  function createComponent$1(vnode) {
+    //调用hook中的init方法
+    var i = vnode.data;
+    if ((i = i.hook) && (i = i.init)) {
+      i(vnode);
+    }
+    if (vnode.componentInstance) {
+      return true;
+    }
+  }
   function createElm(vnode) {
     var tag = vnode.tag,
       children = vnode.children;
@@ -931,6 +966,9 @@
       vnode.data;
       var text = vnode.text;
     if (typeof tag == "string") {
+      if (createComponent$1(vnode)) {
+        return vnode.componentInstance.$el;
+      }
       vnode.el = document.createElement(tag);
       updateProperties(vnode);
       children.forEach(function (child) {
@@ -1013,7 +1051,7 @@
   function initMixin(Vue) {
     Vue.prototype._init = function (options) {
       var vm = this;
-      vm.$options = mergeOptions(vm.constructor.options, options);
+      vm.$options = mergeOptions$1(vm.constructor.options, options);
       callHook(vm, 'beforeCreate');
       //初始化状态（将数据做一个初始化劫持，当改变数据时更新视图）
       initState(vm);
@@ -1045,7 +1083,7 @@
   function renderMixin(Vue) {
     Vue.prototype._c = function () {
       //创建虚拟dom元素
-      return createElement.apply(void 0, arguments);
+      return createElement.apply(void 0, [this].concat(Array.prototype.slice.call(arguments)));
     };
     Vue.prototype._s = function (val) {
       //stringify
@@ -1063,30 +1101,77 @@
       return vnode;
     };
   }
-  function createElement(tag) {
-    var data = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-    for (var _len = arguments.length, children = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
-      children[_key - 2] = arguments[_key];
+  function createElement(vm, tag) {
+    var data = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    for (var _len = arguments.length, children = new Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
+      children[_key - 3] = arguments[_key];
     }
-    return vnode(tag, data, data.key, children);
+    //如果是组件 产生虚拟节点时需要把组件的构造函数传入
+    if (isReservedTag(tag)) {
+      return vnode(tag, data, data.key, children);
+    } else {
+      vm.$option.components[tag];
+      //创建组件的虚拟节点 children是插槽
+      return createComponent(vm, tag, data, data.key);
+    }
+  }
+  function createComponent() {
+    var baseCtor = vm.$options._base;
+    if ((typeof Ctor === "undefined" ? "undefined" : _typeof(Ctor)) == "object") {
+      Ctor = baseCtor.extend(Ctor);
+    }
+    //给组件增加生命周期
+    data.hook = {
+      init: function init() {}
+    };
+    return vnode("vue-component-".concat(Ctor.cid, "-").concat(tag), data, data.key, undefined, undefined, {
+      Ctor: Ctor,
+      children: children
+    });
   }
   function createTextVnode(text) {
     return vnode(undefined, undefined, undefined, undefined, text);
   }
-  function vnode(tag, data, key, children, text) {
+  function vnode(tag, data, key, children, text, componentOptions) {
     return {
       tag: tag,
       data: data,
       key: key,
       children: children,
-      text: text
+      text: text,
+      componentOptions: componentOptions
+    };
+  }
+
+  function initExtend(Vue) {
+    var cid = 0;
+    Vue.extend = function (extendOptions) {
+      var Super = this;
+      var Sub = function VueComponent(options) {
+        this._init(options);
+      };
+      Sub.cid = cid++;
+      //子类继承父类原型上的方法
+      Sub.prototype = Object.create(Super.prototype);
+      Sub.prototype.constructor = Sub;
+      Sub.options = mergeOptions(Super.options, extendOptions);
+      Sub.components = Super.components;
+      return Sub;
     };
   }
 
   function initGlobalApi(Vue) {
     Vue.options = {};
     Vue.mixin = function (mixin) {
-      this.options = mergeOptions(this.options, mixin);
+      this.options = mergeOptions$1(this.options, mixin);
+    };
+    Vue.options._base = Vue; //_base 最终的Vue的构造函数保留在options对象中
+    Vue.options.components = {};
+    initExtend(Vue);
+    Vue.component = function (id, definition) {
+      definition.name = definition.name || id;
+      definition = this.options._base.extend(definition);
+      Vue.options.components[id] = definition;
     };
   }
 

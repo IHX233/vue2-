@@ -123,9 +123,22 @@ function updateChildren(oldChildren,newChildren,parent){
         }
     }
 }
+function createComponent(vnode){
+    //调用hook中的init方法
+    let i = vnode.data
+    if((i = i.hook)&&(i = i.init)){
+        i(vnode)
+    }
+    if(vnode.componentInstance){
+        return true;
+    }
+}
 export function createElm(vnode){
     let {tag,children,key,data,text} = vnode
     if(typeof tag == "string"){
+        if(createComponent(vnode)){
+            return vnode.componentInstance.$el
+        }
         vnode.el = document.createElement(tag)
         updateProperties(vnode)
         children.forEach(child=>{
